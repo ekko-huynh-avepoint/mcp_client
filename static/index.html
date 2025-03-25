@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minimal MCP-Client</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f5f5f5;
+    }
+    .card {
+      margin-top: 1.5rem;
+    }
+    #responseArea {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      min-height: 3em;
+      background-color: #fafafa;
+      padding: 1rem;
+      border: 1px solid #e0e0e0;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <nav class="green darken-3">
+    <div class="nav-wrapper container">
+      <a href="#" class="brand-logo">MCP Client</a>
+    </div>
+  </nav>
+  
+  <div class="container">
+    <h4 class="center-align" style="margin-top: 2rem;">Minimal MCP Client UI</h4>
+    
+    <!-- Server Registration Card -->
+    <div class="card">
+      <div class="card-content">
+        <span class="card-title">Register New MCP Server</span>
+        <form id="serverForm">
+          <div class="row">
+            <div class="input-field col s12 m6">
+              <input id="serverName" type="text" required>
+              <label for="serverName">Server Name</label>
+            </div>
+            <div class="input-field col s12 m6">
+              <input id="serverUrl" type="url" required>
+              <label for="serverUrl">SSE-URL (e.g. http://127.0.0.1:3000/sse)</label>
+            </div>
+          </div>
+          <button type="submit" class="btn waves-effect waves-light red lighten-1">
+            Add Server <i class="material-icons right">add</i>
+          </button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Registered Servers List Card -->
+    <div class="card">
+      <div class="card-content">
+        <span class="card-title">Registered Servers</span>
+        <ul id="serverList" class="collection"></ul>
+      </div>
+    </div>
+    
+    <!-- Ask Question Card -->
+    <div class="card">
+      <div class="card-content">
+        <span class="card-title">Question / Prompt</span>
+        <form id="askForm">
+          <div class="row">
+            <div class="input-field col s12">
+              <input id="question" type="text" required>
+              <label for="question">Your Question / Prompt</label>
+            </div>
+          </div>
+          <button type="submit" class="btn waves-effect waves-light red lighten-1">
+            Send <i class="material-icons right">send</i>
+          </button>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Answer Card -->
+    <div class="card">
+      <div class="card-content">
+        <span class="card-title">Answer</span>
+        <div id="responseArea"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      fetchServers();
+    });
+    
+    const serverNameEl = document.getElementById("serverName");
+    const serverUrlEl = document.getElementById("serverUrl");
+    const serverListEl = document.getElementById("serverList");
+    const questionEl = document.getElementById("question");
+    const responseEl = document.getElementById("responseArea");
+    
+    const serverForm = document.getElementById("serverForm");
+    const askForm = document.getElementById("askForm");
+    
+    async function fetchServers() {
+      try {
+        const res = await fetch("/api/servers");
+        const data = await res.json();
+        updateServerList(data);
+      } catch (error) {
+        console.error("Error fetching servers:", error);
+      }
+    }
+    
+    function updateServerList(servers) {
+      serverListEl.innerHTML = "";
+      Object.entries(servers).forEach(([name, config]) => {
+        const li = document.createElement("li");
+        li.className = "collection-item";
+        li.textContent = `${name} → ${config.url}`;
+        serverListEl.appendChild(li);
+      });
+    }
+    
+    serverForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = serverNameEl.value.trim();
+      const url = serverUrlEl.value.trim();
+      if (!name || !url) {
+        M.toast({html: "Please provide both server name and SSE URL!", classes: "red"});
+        return;
+      }
+      try {
+        const res = await fetch("/api/servers", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({name, url}),
+        });
+        if (res.ok) {
+          serverNameEl.value = "";
+          serverUrlEl.value = "";
+          M.toast({html: "Server added!", classes: "green"});
+          fetchServers();
+        } else {
+          M.toast({html: "Failed to add server", classes: "red"});
+        }
+      } catch (error) {
+        M.toast({html: "Error adding server", classes: "red"});
+      }
+    });
+    
+    askForm.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const question = questionEl.value.trim();
+      if (!question) {
+        M.toast({html: "Please enter a question.", classes: "red"});
+        return;
+      }
+      responseEl.textContent = "Loading...";
+      try {
+        const res = await fetch("/api/ask", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({question}),
+        });
+        const data = await res.json();
+        if (data.answer && Array.isArray(data.answer)) {
+          const aiMessages = data.answer.filter(msg => msg.type === "ai");
+          const lastAi = aiMessages[aiMessages.length - 1];
+          responseEl.textContent = lastAi ? lastAi.content : "No AI answer found.";
+        } else {
+          responseEl.textContent = "Error or no answer received.";
+        }
+      } catch (err) {
+        responseEl.textContent = "Error: " + err;
+      }
+    });
+  </script>
+</body>
+</html>
