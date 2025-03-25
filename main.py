@@ -1,5 +1,3 @@
-import os
-from pathlib import Path
 import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
@@ -12,26 +10,19 @@ import openai
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from langgraph.prebuilt import create_react_agent
 
-# Ensure the "static" directory exists with an index.html file.
-static_dir = Path(__file__).parent / "static"
-static_dir.mkdir(exist_ok=True)
-index_file = static_dir / "index.html"
-if not index_file.exists():
-    index_file.write_text("<html><body><h1>Welcome to the FastAPI App</h1></body></html>")
 
-# Global servers configuration
 servers_config: Dict[str, dict] = {
     "DappierServer": {
         "transport": "sse",
-        "url": "http://103.116.38.80:3003"
+        "url": "http://103.116.38.80:3003/sse"
     },
     "ArxivServer": {
         "transport": "sse",
-        "url": "http://103.116.38.80:3000"
+        "url": "http://103.116.38.80:3000/sse"
     },
     "ExcelServer": {
         "transport": "sse",
-        "url": "http://103.116.38.80:3002"
+        "url": "http://103.116.38.80:3002/sse"
     }
 }
 
@@ -62,11 +53,11 @@ async def lifespan(app: FastAPI):
         await app.state.persistent_client.__aexit__(None, None, None)
 
 app = FastAPI(lifespan=lifespan)
-app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/")
 def index():
-    return FileResponse(index_file)
+    return FileResponse("static/index.html")
 
 @app.get("/api/servers")
 def list_servers():
